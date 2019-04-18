@@ -183,6 +183,25 @@ class HTTPProcessor:
         self.vars = {}
         self.success = 0
         self.failures = 0
+
+        if len(self.contents) > 0 and '@import' in self.contents[0]:
+            # process import by adding all named http_objects
+            imports = self.contents.pop(0).strip().split('\n')
+            for line in imports:
+                if line.startswith('@import'):
+                    path = os.path.join(
+                        os.path.dirname(file), line[7:].strip())
+                    if not os.path.exists(path):
+                        log('Import path "{}" not found'.format(path), 1)
+
+                    contents = open(path, 'r').read().split('###')
+                    for content in contents:
+                        http_object = HTTPObject(content, self)
+                        self.vars.update(http_object.vars)
+                        if 'name' in http_object.meta:
+                            self.http_objects_by_name[http_object.meta['name']
+                                                      ] = http_object
+
         for content in self.contents:
             http_object = HTTPObject(content, self)
             self.vars.update(http_object.vars)
@@ -205,7 +224,8 @@ class HTTPProcessor:
             # a variable that hasn't been populated
             if token in self.vars:
                 return self.vars[token]
-            for http_object in self.http_opjects:
+            for key in self.http_objects_by_name:
+                http_object = self.http_objects_by_name[key]
                 if token in http_object.eval_vars:
                     self.run_http_object(http_object)
                     return self.evaluate(token)
