@@ -92,33 +92,48 @@ class HTTPObject:
                 self.headers[key])
         return headers
 
-    def replace_vars(self, text, pass_self=False):
+    def replace_vars(self, text, for_test=False):
+        def wrap_quote(txt):
+            if for_test and type(txt) is str:
+                return "'{}'".format(txt)
+            return txt
+
         if text is None:
-            return ''
+            text = ''
+        else:
+            if '{{' in text and '}}' in text:
+                for key in self.vars:
+                    if '{{' + key + '}}' == text:
+                        return wrap_quote(self.vars[key])
+                    else:
+                        text = text.replace(
+                            '{{' + key + '}}', str(wrap_quote(self.vars[key])))
 
-        if '{{' in text and '}}' in text:
-            for key in self.vars:
-                if '{{' + key + '}}' == text:
-                    return str(self.vars[key])
-                else:
-                    text = text.replace('{{' + key + '}}', str(self.vars[key]))
+            eval_vars = re.findall("{{.*?}}", text)
+            if eval_vars:
+                for eval_var in eval_vars:
+                    v = eval_var[2:-2]
+                    if v not in self.vars:
+                        val = self.processor.evaluate(
+                            v, self if for_test else None)
+                        # check if direct map
+                        if len(eval_vars) == 1 and eval_var == text:
+                            text = val
+                        else:
+                            text = text.replace(
+                                '{{' + v + '}}', str(wrap_quote(val)))
+                        # store non-built-in functions
+                        if not v.startswith('$'):
+                            self.vars[v] = val
 
-        eval_vars = re.findall("{{.*?}}", text)
-        if eval_vars:
-            for eval_var in eval_vars:
-                v = eval_var[2:-2]
-                if v not in self.vars:
-                    val = self.processor.evaluate(
-                        v, self if pass_self else None)
-                    text = text.replace('{{' + v + '}}', str(val))
-                    # store non-built-in functions
-                    if not v.startswith('$'):
-                        self.vars[v] = val
-
-        return str(text)
+        return text
 
     def run(self):
         if not self.ran:
+            if self.meta.get('skip') == 'true':
+                self.ran = True
+                log('Skipped {}'.format(self.meta.get('name', self.url)))
+                return
             if self.eval_vars:
                 for key in self.eval_vars:
                     self.vars[key] = self.replace_vars(self.eval_vars[key])
@@ -198,13 +213,13 @@ class HTTPProcessor:
         current_http_object = http_object
         current_object = None
         for val in token.split('.'):
-            if not http_object and val in self.http_objects_by_name:
+            if current_http_object is None and val in self.http_objects_by_name:
                 current_http_object = self.http_objects_by_name[val]
                 self.run_http_object(current_http_object)
-            elif current_http_object:
+            elif current_http_object is not None:
                 if val == 'response':
                     current_object = current_http_object.response
-                elif current_object:
+                elif current_object is not None:
                     if val == 'body':
                         try:
                             current_object = current_object.json()
@@ -219,6 +234,7 @@ class HTTPProcessor:
                             current_object = getattr(current_object, val, None)
                         except:
                             current_object = None
+
         return current_object
 
     def run_http_object(self, http_object):
