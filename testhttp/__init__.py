@@ -1,0 +1,294 @@
+import sys
+import os
+import argparse
+import requests
+import re
+import random
+
+
+verbose = False
+debug = False
+stop_on_fail = False
+system_vars = {}
+
+
+def log(message, exit_code=None, end=None):
+    print(message, end=end)
+    if exit_code is not None:
+        exit(exit_code)
+
+
+class HTTPObject:
+    def __init__(self, data, processor):
+        self.method = 'GET'
+        self.url = None
+        self.version = 'HTTP/1.1'  # ignored
+        self.headers = {}
+        self.body = None
+        self.data = data
+        self.meta = {}
+        self.vars = {}
+        self.eval_vars = {}
+        self.tests = []
+        self.ran = False
+        self.test_result = None
+        self.response = None
+        self.processor = processor
+
+        self.parse_meta()
+
+    def parse_meta(self):
+        lines = self.data.split('\n')
+        start_headers = False
+        start_body = False
+        start_test = False
+        body = []
+        for line in lines:
+            line = line.strip()
+            if line.startswith('# @'):
+                meta = line[3:].split(' ')
+                if len(meta) == 2:
+                    self.meta[meta[0]] = meta[1]
+            elif line.startswith('@') and '=' in line:
+                eq_idx = line.find('=')
+                k = line[1:eq_idx].strip()
+                v = line[eq_idx+1:].strip()
+                if '{{' in line and '}}' in line:
+                    self.eval_vars[k] = v
+                else:
+                    self.vars[k] = v
+            elif line.startswith('GET') or line.startswith('POST') or line.startswith('PATCH') or line.startswith('PUT') or line.startswith('DELETE') or line.startswith('http'):
+                start_headers = True
+                part = line.split(' ')
+                if line.startswith('http'):
+                    self.url = part[0]
+                else:
+                    self.method = part[0]
+                    self.url = part[1]
+            elif start_headers:
+                if not line.strip():
+                    start_headers = False
+                    start_body = True
+                elif ':' in line:
+                    idx = line.find(':')
+                    self.headers[line[:idx].strip()] = line[idx+1:].strip()
+            elif start_body:
+                if line.startswith('>>>'):
+                    start_body = False
+                    start_test = True
+                else:
+                    body.append(line)
+            elif start_test:
+                if line.startswith('assert'):
+                    self.tests.append(line[6:].strip())
+
+        if body:
+            self.body = '\n'.join(body)
+
+    def parse_headers(self):
+        headers = {}
+        for key in self.headers:
+            headers[self.replace_vars(key)] = self.replace_vars(
+                self.headers[key])
+        return headers
+
+    def replace_vars(self, text, pass_self=False):
+        if text is None:
+            return ''
+
+        if '{{' in text and '}}' in text:
+            for key in self.vars:
+                if '{{' + key + '}}' == text:
+                    return str(self.vars[key])
+                else:
+                    text = text.replace('{{' + key + '}}', str(self.vars[key]))
+
+        eval_vars = re.findall("{{.*?}}", text)
+        if eval_vars:
+            for eval_var in eval_vars:
+                v = eval_var[2:-2]
+                if v not in self.vars:
+                    val = self.processor.evaluate(
+                        v, self if pass_self else None)
+                    text = text.replace('{{' + v + '}}', str(val))
+                    # store non-built-in functions
+                    if not v.startswith('$'):
+                        self.vars[v] = val
+
+        return str(text)
+
+    def run(self):
+        if not self.ran:
+            if self.eval_vars:
+                for key in self.eval_vars:
+                    self.vars[key] = self.replace_vars(self.eval_vars[key])
+                self.eval_vars = {}
+
+            body = self.replace_vars(self.body)
+            url = self.replace_vars(self.url)
+            headers = self.parse_headers()
+            log('Running {}'.format(self.meta.get('name', self.url)), end='...')
+            if verbose:
+                log('Request: {} {} {}'.format(
+                    self.method, url, body))
+
+            self.response = requests.request(self.method,
+                                             headers=headers,
+                                             url=url,
+                                             data=body)
+            if verbose:
+                log('Response: {} {}'.format(
+                    self.response.status_code, self.response.text))
+            self.ran = True
+
+    def run_tests(self):
+        if self.test_result is None:
+            success_count = 0
+            failed_count = 0
+            for test in self.tests:
+                code = self.replace_vars(test, True)
+                if eval(code):
+                    success_count += 1
+                else:
+                    failed_count += 1
+                    log("Failed test: {}".format(code))
+            if success_count:
+                log("PASSED: {}".format(success_count))
+            if failed_count:
+                log("FAILED: {}".format(failed_count))
+            self.test_result = failed_count == 0
+        return self.test_result
+
+
+class HTTPProcessor:
+    def __init__(self, file):
+        self.contents = open(file, 'r').read().split('###')
+        self.http_opjects = []
+        self.http_objects_by_name = {}
+        self.vars = {}
+        self.success = 0
+        self.failures = 0
+        for content in self.contents:
+            http_object = HTTPObject(content, self)
+            self.vars.update(http_object.vars)
+            if 'name' in http_object.meta:
+                self.http_objects_by_name[http_object.meta['name']
+                                          ] = http_object
+            self.http_opjects.append(http_object)
+
+    def evaluate(self, token, http_object=None):
+        if token in system_vars:
+            return system_vars[token]
+        elif token.startswith('$randomInt'):
+            t = token.split(' ')
+            if len(t) != 3:
+                raise Exception('Invalid token "{}"'.format(token))
+            n = random.randint(int(t[1]), int(t[2]))
+            return str(n)
+
+        if '.' not in token:
+            # a variable that hasn't been populated
+            if token in self.vars:
+                return self.vars[token]
+            for http_object in self.http_opjects:
+                if token in http_object.eval_vars:
+                    self.run_http_object(http_object)
+                    return self.evaluate(token)
+
+        current_http_object = http_object
+        current_object = None
+        for val in token.split('.'):
+            if not http_object and val in self.http_objects_by_name:
+                current_http_object = self.http_objects_by_name[val]
+                self.run_http_object(current_http_object)
+            elif current_http_object:
+                if val == 'response':
+                    current_object = current_http_object.response
+                elif current_object:
+                    if val == 'body':
+                        try:
+                            current_object = current_object.json()
+                        except:
+                            current_object = current_object.text
+                    elif type(current_object) is dict:
+                        current_object = current_object.get(val, {})
+                    elif type(current_object) is list:
+                        current_object = current_object[int(val)]
+                    else:
+                        try:
+                            current_object = getattr(current_object, val, None)
+                        except:
+                            current_object = None
+        return current_object
+
+    def run_http_object(self, http_object):
+        http_object.vars.update(self.vars)
+        http_object.run()
+        self.vars.update(http_object.vars)
+        if debug:
+            log('VARS: {}'.format(self.vars))
+        return http_object.run_tests()
+
+    def run(self, name=None, index=None):
+        if name:
+            for n in name.split(','):
+                if n not in self.http_objects_by_name:
+                    log('Name "{}" not found'.format(n), 1)
+                else:
+                    self.run_http_object(self.http_objects_by_name[n])
+        elif index is not None:
+            total_objects = len(self.http_opjects)
+            if index < 0 or index >= total_objects:
+                log("Index must be greater than 0 and less than {}".format(
+                    total_objects), 1)
+            else:
+                self.run_http_object(self.http_opjects[index])
+        else:
+            for http_object in self.http_opjects:
+                self.run_http_object(http_object)
+
+        for http_object in self.http_opjects:
+            if http_object.ran:
+                if http_object.test_result is True:
+                    self.success += 1
+                elif http_object.test_result is False:
+                    self.failures += 1
+        return self.failures == 0
+
+
+def cmd():
+    global verbose, stop_on_fail, debug
+    parser = argparse.ArgumentParser(description='Run http tests')
+    parser.add_argument('--file',
+                        help='test a specific file')
+    parser.add_argument('--name',
+                        help='test a specific name within the file or comma delimeted names')
+    parser.add_argument('--index', type=int,
+                        help='test a specific http with a positional index starts with 0')
+    parser.add_argument('--stop_on_fail', dest='stop_on_fail',
+                        action='store_true', help='Stop tests on fail')
+    parser.add_argument('--verbose', dest='verbose',
+                        action='store_true', help='Print more info')
+    parser.add_argument('--debug', dest='debug',
+                        action='store_true', help='Print debug info')
+
+    args = parser.parse_args()
+    if args.verbose:
+        verbose = True
+    if args.stop_on_fail:
+        stop_on_fail = True
+    if args.debug:
+        debug = True
+    if args.file:
+        if not os.path.exists(args.file):
+            log('File "{}" not found'.format(args.file), 1)
+        http_processor = HTTPProcessor(args.file)
+        run_success = http_processor.run(name=args.name, index=args.index)
+        message = 'PASSED: {} FAILED: {}'.format(
+            http_processor.success,
+            http_processor.failures
+        )
+        if run_success:
+            log("Success[{}]".format(message), 0)
+        else:
+            log("Failed[{}]".format(message), 1)
