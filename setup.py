@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='testhttp',
-      version='0.3',
+      version='0.4',
       description='HTTP testing tool',
       long_description=open('README.md', 'r').read(),
       long_description_content_type="text/markdown",

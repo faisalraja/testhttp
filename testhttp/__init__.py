@@ -6,7 +6,7 @@ import requests
 import re
 import random
 
-version = '0.3'
+version = '0.4'
 verbose = False
 debug = False
 stop_on_fail = False
@@ -141,20 +141,27 @@ class HTTPObject:
                 self.eval_vars = {}
 
             body = self.replace_vars(self.body)
-            is_bin_body = False
-            if body.startswith('<'):
-                path = os.path.join(self.processor.cwd, body[1:].strip())
-                if not os.path.exists(path):
-                    log('File "{}" not found'.format(path), 1)
-                body = open(path, 'rb').read()
-                is_bin_body = True
+            inline_files = re.findall(r'^(<\s.+)', body, flags=re.MULTILINE)
+            if inline_files:
+                for inline_file in inline_files:
+                    path = inline_file[1:].strip()
+                    if path.startswith('.'):
+                        path = os.path.join(self.processor.cwd, path)
+
+                    if not os.path.exists(path):
+                        log('File "{}" not found'.format(path), 1)
+                    data = open(path, 'rb').read()
+                    if len(inline_files) == 1 and inline_file == body:
+                        body = data
+                    else:
+                        body = body.replace(inline_file, data.decode())
 
             url = self.replace_vars(self.url)
             headers = self.parse_headers()
             log('Running {}'.format(self.meta.get('name', self.url)), end='...')
             if verbose:
                 log('Request: {} {} {}'.format(
-                    self.method, url, len(body) if is_bin_body else body))
+                    self.method, url, len(body) if len(body) > 1000 else body))
 
             self.response = requests.request(self.method,
                                              headers=headers,
