@@ -5,7 +5,7 @@ import requests
 import re
 import random
 
-
+version = '0.2'
 verbose = False
 debug = False
 stop_on_fail = False
@@ -122,8 +122,8 @@ class HTTPObject:
                         else:
                             text = text.replace(
                                 '{{' + v + '}}', str(wrap_quote(val)))
-                        # store non-built-in functions
-                        if not v.startswith('$'):
+                        # do not store built-in functions or context tokens
+                        if not (v.startswith('$') or v.startswith('response')):
                             self.vars[v] = val
 
         return text
@@ -220,7 +220,7 @@ class HTTPProcessor:
             n = random.randint(int(t[1]), int(t[2]))
             return str(n)
 
-        if '.' not in token:
+        if http_object is None and '.' not in token:
             # a variable that hasn't been populated
             if token in self.vars:
                 return self.vars[token]
@@ -307,8 +307,12 @@ def cmd():
                         action='store_true', help='Print more info')
     parser.add_argument('--debug', dest='debug',
                         action='store_true', help='Print debug info')
+    parser.add_argument('--version', dest='version',
+                        action='store_true', help='Print current version')
 
     args = parser.parse_args()
+    if args.version:
+        log('testhttp v{}'.format(version), 0)
     if args.verbose:
         verbose = True
     if args.stop_on_fail:
