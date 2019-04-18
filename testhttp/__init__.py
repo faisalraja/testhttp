@@ -1,11 +1,12 @@
 import sys
+import glob
 import os
 import argparse
 import requests
 import re
 import random
 
-version = '0.2'
+version = '0.3'
 verbose = False
 debug = False
 stop_on_fail = False
@@ -76,7 +77,7 @@ class HTTPObject:
                 if line.startswith('>>>'):
                     start_body = False
                     start_test = True
-                else:
+                elif line.strip():
                     body.append(line)
             elif start_test:
                 if line.startswith('assert'):
@@ -88,8 +89,8 @@ class HTTPObject:
     def parse_headers(self):
         headers = {}
         for key in self.headers:
-            headers[self.replace_vars(key)] = self.replace_vars(
-                self.headers[key])
+            headers[self.replace_vars(key)] = str(self.replace_vars(
+                self.headers[key]))
         return headers
 
     def replace_vars(self, text, for_test=False):
@@ -140,12 +141,20 @@ class HTTPObject:
                 self.eval_vars = {}
 
             body = self.replace_vars(self.body)
+            is_bin_body = False
+            if body.startswith('<'):
+                path = os.path.join(self.processor.cwd, body[1:].strip())
+                if not os.path.exists(path):
+                    log('File "{}" not found'.format(path), 1)
+                body = open(path, 'rb').read()
+                is_bin_body = True
+
             url = self.replace_vars(self.url)
             headers = self.parse_headers()
             log('Running {}'.format(self.meta.get('name', self.url)), end='...')
             if verbose:
                 log('Request: {} {} {}'.format(
-                    self.method, url, body))
+                    self.method, url, len(body) if is_bin_body else body))
 
             self.response = requests.request(self.method,
                                              headers=headers,
@@ -176,17 +185,27 @@ class HTTPObject:
 
 
 class HTTPProcessor:
-    def __init__(self, file):
-        self.contents = open(file, 'r').read().split('###')
+    def __init__(self, files):
         self.http_opjects = []
         self.http_objects_by_name = {}
         self.vars = {}
         self.success = 0
         self.failures = 0
+        self.cwd = None
 
-        if len(self.contents) > 0 and '@import' in self.contents[0]:
-            # process import by adding all named http_objects
-            imports = self.contents.pop(0).strip().split('\n')
+        for file in files.split(','):
+            if not os.path.exists(file):
+                log('File "{}" not found'.format(file), 1)
+
+            self.parse_http(file, False)
+
+    def parse_http(self, file, is_import=False):
+        if self.cwd is None and not is_import:
+            self.cwd = os.path.dirname(file)
+        contents = list(map(lambda s: s.strip(), open(
+            file, 'r').read().split('###')))
+        if len(contents) > 0 and '@import' in contents[0]:
+            imports = contents.pop(0).strip().split('\n')
             for line in imports:
                 if line.startswith('@import'):
                     path = os.path.join(
@@ -194,21 +213,16 @@ class HTTPProcessor:
                     if not os.path.exists(path):
                         log('Import path "{}" not found'.format(path), 1)
 
-                    contents = open(path, 'r').read().split('###')
-                    for content in contents:
-                        http_object = HTTPObject(content, self)
-                        self.vars.update(http_object.vars)
-                        if 'name' in http_object.meta:
-                            self.http_objects_by_name[http_object.meta['name']
-                                                      ] = http_object
+                    self.parse_http(path, True)
 
-        for content in self.contents:
+        for content in contents:
             http_object = HTTPObject(content, self)
             self.vars.update(http_object.vars)
             if 'name' in http_object.meta:
                 self.http_objects_by_name[http_object.meta['name']
                                           ] = http_object
-            self.http_opjects.append(http_object)
+            if not is_import:
+                self.http_opjects.append(http_object)
 
     def evaluate(self, token, http_object=None):
         if token in system_vars:
@@ -296,7 +310,9 @@ def cmd():
     global verbose, stop_on_fail, debug
     parser = argparse.ArgumentParser(description='Run http tests')
     parser.add_argument('--file',
-                        help='test a specific file')
+                        help='test a specific file or comma delimeted file paths')
+    parser.add_argument('--pattern',
+                        help='test a files matching a pattern "path/to/*.http"')
     parser.add_argument('--name',
                         help='test a specific name within the file or comma delimeted names')
     parser.add_argument('--index', type=int,
@@ -319,10 +335,12 @@ def cmd():
         stop_on_fail = True
     if args.debug:
         debug = True
-    if args.file:
-        if not os.path.exists(args.file):
-            log('File "{}" not found'.format(args.file), 1)
-        http_processor = HTTPProcessor(args.file)
+    files = args.file
+    if not files and args.pattern:
+        files = ','.join(glob.glob(args.pattern))
+
+    if files:
+        http_processor = HTTPProcessor(files)
         run_success = http_processor.run(name=args.name, index=args.index)
         message = 'PASSED: {} FAILED: {}'.format(
             http_processor.success,
