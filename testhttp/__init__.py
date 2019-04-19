@@ -241,7 +241,7 @@ class HTTPProcessor:
             n = random.randint(int(t[1]), int(t[2]))
             return str(n)
 
-        if http_object is None and '.' not in token:
+        if '.' not in token:
             # a variable that hasn't been populated
             if token in self.vars:
                 return self.vars[token]
@@ -267,7 +267,7 @@ class HTTPProcessor:
                         except:
                             current_object = current_object.text
                     elif type(current_object) is dict:
-                        current_object = current_object.get(val, {})
+                        current_object = current_object.get(val, None)
                     elif type(current_object) is list:
                         current_object = current_object[int(val)]
                     else:
