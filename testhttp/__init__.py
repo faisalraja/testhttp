@@ -6,7 +6,7 @@ import requests
 import re
 import random
 
-version = '0.4'
+version = '0.5.0'
 verbose = False
 debug = False
 stop_on_fail = False
