@@ -6,7 +6,7 @@ import requests
 import re
 import random
 
-version = '0.5.0'
+version = '0.5.1'
 verbose = False
 debug = False
 stop_on_fail = False
@@ -286,13 +286,19 @@ class HTTPProcessor:
             log('VARS: {}'.format(self.vars))
         return http_object.run_tests()
 
-    def run(self, name=None, index=None):
+    def run(self, name=None, index=None, post_name=None, pre_name=None):
+
+        if pre_name:
+            for n in pre_name.split(','):
+                if n not in self.http_objects_by_name:
+                    log('Pre-Name "{}" not found'.format(n), 1)
+                self.run_http_object(self.http_objects_by_name[n])
+
         if name:
             for n in name.split(','):
                 if n not in self.http_objects_by_name:
                     log('Name "{}" not found'.format(n), 1)
-                else:
-                    self.run_http_object(self.http_objects_by_name[n])
+                self.run_http_object(self.http_objects_by_name[n])
         elif index is not None:
             total_objects = len(self.http_opjects)
             if index < 0 or index >= total_objects:
@@ -303,6 +309,12 @@ class HTTPProcessor:
         else:
             for http_object in self.http_opjects:
                 self.run_http_object(http_object)
+
+        if post_name:
+            for n in post_name.split(','):
+                if n not in self.http_objects_by_name:
+                    log('Post-Name "{}" not found'.format(n), 1)
+                self.run_http_object(self.http_objects_by_name[n])
 
         for http_object in self.http_opjects:
             if http_object.ran:
@@ -317,11 +329,15 @@ def cmd():
     global verbose, stop_on_fail, debug
     parser = argparse.ArgumentParser(description='Run http tests')
     parser.add_argument('--file',
-                        help='test a specific file or comma delimeted file paths')
+                        help='test a specific file or comma delimited file paths')
     parser.add_argument('--pattern',
                         help='test a files matching a pattern "path/to/*.http"')
     parser.add_argument('--name',
-                        help='test a specific name within the file or comma delimeted names')
+                        help='test a specific name within the file or comma delimited names')
+    parser.add_argument('--pre-name',
+                        help='run a name or comma delimited before starting any tests')
+    parser.add_argument('--post-name',
+                        help='run a name or comma delimited after all tests are done running (this will not re-run on the same session if already executed)')
     parser.add_argument('--index', type=int,
                         help='test a specific http with a positional index starts with 0')
     parser.add_argument('--stop_on_fail', dest='stop_on_fail',
@@ -348,7 +364,12 @@ def cmd():
 
     if files:
         http_processor = HTTPProcessor(files)
-        run_success = http_processor.run(name=args.name, index=args.index)
+        run_success = http_processor.run(
+            name=args.name,
+            index=args.index,
+            post_name=args.post_name,
+            pre_name=args.pre_name
+        )
         message = 'PASSED: {} FAILED: {}'.format(
             http_processor.success,
             http_processor.failures
