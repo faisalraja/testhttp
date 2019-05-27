@@ -201,7 +201,7 @@ class HTTPProcessor:
         self.failures = 0
         self.cwd = None
 
-        for variable in vars:
+        for variable in [variable for variable in (vars or [])]:
             var_key_value = variable.split('=')
             self.vars[var_key_value[0]] = var_key_value[1]
 
