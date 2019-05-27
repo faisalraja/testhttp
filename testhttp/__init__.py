@@ -5,6 +5,7 @@ import argparse
 import requests
 import re
 import random
+import collections
 
 version = '0.5.1'
 verbose = False
@@ -290,7 +291,7 @@ class HTTPProcessor:
             log('VARS: {}'.format(self.vars))
         return http_object.run_tests()
 
-    def run(self, name=None, index=None, post_name=None, pre_name=None):
+    def run(self, name=None, index=None, post_name=None, pre_name=None, distinct=False):
 
         if pre_name:
             for n in pre_name.split(','):
@@ -311,7 +312,20 @@ class HTTPProcessor:
             else:
                 self.run_http_object(self.http_opjects[index])
         else:
-            for http_object in self.http_opjects:
+           
+            http_objects = []
+            if distinct:
+                seen = collections.OrderedDict()
+
+                for item in self.http_opjects:
+                    seen[item.meta.get('name', item.url)] = item
+
+                http_objects = seen.values()
+            else:
+                http_objects = self.http_opjects
+
+
+            for http_object in http_objects:
                 self.run_http_object(http_object)
 
         if post_name:
@@ -348,6 +362,9 @@ def cmd():
                         help='run a name or comma delimited after all tests are done running (this will not re-run on the same session if already executed)')
     parser.add_argument('--index', type=int,
                         help='test a specific http with a positional index starts with 0')
+    parser.add_argument('--distinct',
+                        help='remove tests with the same name (usefull when running multiple independent tests)', 
+                        action='store_true')
     parser.add_argument('--stop_on_fail', dest='stop_on_fail',
                         action='store_true', help='Stop tests on fail')
     parser.add_argument('--verbose', dest='verbose',
@@ -377,7 +394,8 @@ def cmd():
             name=args.name,
             index=args.index,
             post_name=args.post_name,
-            pre_name=args.pre_name
+            pre_name=args.pre_name,
+            distinct=args.distinct
         )
         message = 'PASSED: {} FAILED: {}'.format(
             http_processor.success,
