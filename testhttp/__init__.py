@@ -158,7 +158,7 @@ class HTTPObject:
 
             url = self.replace_vars(self.url)
             headers = self.parse_headers()
-            log('Running {}'.format(self.meta.get('name', self.url)), end='...')
+            log('Running \'{}\''.format(self.meta.get('name', self.url)))
             if verbose:
                 log('Request: {} {} {}'.format(
                     self.method, url, len(body) if len(body) > 1000 else body))
@@ -375,6 +375,6 @@ def cmd():
             http_processor.failures
         )
         if run_success:
-            log("Success[{}]".format(message), 0)
+            log("Success [{}]".format(message), 0)
         else:
-            log("Failed[{}]".format(message), 1)
+            log("Failed [{}]".format(message), 1)
