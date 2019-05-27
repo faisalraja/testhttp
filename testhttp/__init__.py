@@ -200,7 +200,7 @@ class HTTPProcessor:
         self.failures = 0
         self.cwd = None
 
-        for file in files.split(','):
+        for file in files:
             if not os.path.exists(file):
                 log('File "{}" not found'.format(file), 1)
 
@@ -329,7 +329,8 @@ def cmd():
     global verbose, stop_on_fail, debug
     parser = argparse.ArgumentParser(description='Run http tests')
     parser.add_argument('--file',
-                        help='test a specific file or comma delimited file paths')
+                        help='test a specific file or comma delimited file paths', 
+                        action='append')
     parser.add_argument('--pattern',
                         help='test a files matching a pattern "path/to/*.http"')
     parser.add_argument('--name',
