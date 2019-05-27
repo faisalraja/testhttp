@@ -192,13 +192,17 @@ class HTTPObject:
 
 
 class HTTPProcessor:
-    def __init__(self, files):
+    def __init__(self, files, vars):
         self.http_opjects = []
         self.http_objects_by_name = {}
         self.vars = {}
         self.success = 0
         self.failures = 0
         self.cwd = None
+
+        for variable in vars:
+            var_key_value = variable.split('=')
+            self.vars[var_key_value[0]] = var_key_value[1]
 
         for file in files:
             if not os.path.exists(file):
@@ -331,6 +335,9 @@ def cmd():
     parser.add_argument('--file',
                         help='test a specific file or comma delimited file paths', 
                         action='append')
+    parser.add_argument('--var',
+                        help='add a variable needed for the scripts (useful for environmental variables)', 
+                        action='append')
     parser.add_argument('--pattern',
                         help='test a files matching a pattern "path/to/*.http"')
     parser.add_argument('--name',
@@ -359,12 +366,13 @@ def cmd():
         stop_on_fail = True
     if args.debug:
         debug = True
+    variables = args.var
     files = args.file
     if not files and args.pattern:
         files = ','.join(glob.glob(args.pattern))
 
     if files:
-        http_processor = HTTPProcessor(files)
+        http_processor = HTTPProcessor(files, variables)
         run_success = http_processor.run(
             name=args.name,
             index=args.index,
