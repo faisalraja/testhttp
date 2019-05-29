@@ -7,7 +7,7 @@ import re
 import random
 import collections
 
-version = '0.5.1'
+version = '0.6.0'
 verbose = False
 debug = False
 stop_on_fail = False
@@ -201,7 +201,11 @@ class HTTPProcessor:
         self.failures = 0
         self.cwd = None
 
-        for variable in [variable for variable in (vars or [])]:
+        # for variable in [variable for variable in (vars or [])]:
+        #     var_key_value = variable.split('=')
+        #     self.vars[var_key_value[0]] = var_key_value[1]
+
+        for variable in (vars or []):
             var_key_value = variable.split('=')
             self.vars[var_key_value[0]] = var_key_value[1]
 
