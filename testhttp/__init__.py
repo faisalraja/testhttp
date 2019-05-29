@@ -5,8 +5,9 @@ import argparse
 import requests
 import re
 import random
+import collections
 
-version = '0.5.1'
+version = '0.6.0'
 verbose = False
 debug = False
 stop_on_fail = False
@@ -158,7 +159,7 @@ class HTTPObject:
 
             url = self.replace_vars(self.url)
             headers = self.parse_headers()
-            log('Running {}'.format(self.meta.get('name', self.url)), end='...')
+            log('Running \'{}\''.format(self.meta.get('name', self.url)))
             if verbose:
                 log('Request: {} {} {}'.format(
                     self.method, url, len(body) if len(body) > 1000 else body))
@@ -192,7 +193,7 @@ class HTTPObject:
 
 
 class HTTPProcessor:
-    def __init__(self, files):
+    def __init__(self, files, vars):
         self.http_opjects = []
         self.http_objects_by_name = {}
         self.vars = {}
@@ -200,7 +201,15 @@ class HTTPProcessor:
         self.failures = 0
         self.cwd = None
 
-        for file in files.split(','):
+        # for variable in [variable for variable in (vars or [])]:
+        #     var_key_value = variable.split('=')
+        #     self.vars[var_key_value[0]] = var_key_value[1]
+
+        for variable in (vars or []):
+            var_key_value = variable.split('=')
+            self.vars[var_key_value[0]] = var_key_value[1]
+
+        for file in files:
             if not os.path.exists(file):
                 log('File "{}" not found'.format(file), 1)
 
@@ -286,7 +295,7 @@ class HTTPProcessor:
             log('VARS: {}'.format(self.vars))
         return http_object.run_tests()
 
-    def run(self, name=None, index=None, post_name=None, pre_name=None):
+    def run(self, name=None, index=None, post_name=None, pre_name=None, distinct=False):
 
         if pre_name:
             for n in pre_name.split(','):
@@ -307,7 +316,20 @@ class HTTPProcessor:
             else:
                 self.run_http_object(self.http_opjects[index])
         else:
-            for http_object in self.http_opjects:
+           
+            http_objects = []
+            if distinct:
+                seen = collections.OrderedDict()
+
+                for item in self.http_opjects:
+                    seen[item.meta.get('name', item.url)] = item
+
+                http_objects = seen.values()
+            else:
+                http_objects = self.http_opjects
+
+
+            for http_object in http_objects:
                 self.run_http_object(http_object)
 
         if post_name:
@@ -329,7 +351,11 @@ def cmd():
     global verbose, stop_on_fail, debug
     parser = argparse.ArgumentParser(description='Run http tests')
     parser.add_argument('--file',
-                        help='test a specific file or comma delimited file paths')
+                        help='test a specific file or comma delimited file paths', 
+                        action='append')
+    parser.add_argument('--var',
+                        help='add a variable needed for the scripts (useful for environmental variables)', 
+                        action='append')
     parser.add_argument('--pattern',
                         help='test a files matching a pattern "path/to/*.http"')
     parser.add_argument('--name',
@@ -340,6 +366,9 @@ def cmd():
                         help='run a name or comma delimited after all tests are done running (this will not re-run on the same session if already executed)')
     parser.add_argument('--index', type=int,
                         help='test a specific http with a positional index starts with 0')
+    parser.add_argument('--distinct',
+                        help='remove tests with the same name (usefull when running multiple independent tests)', 
+                        action='store_true')
     parser.add_argument('--stop_on_fail', dest='stop_on_fail',
                         action='store_true', help='Stop tests on fail')
     parser.add_argument('--verbose', dest='verbose',
@@ -358,23 +387,25 @@ def cmd():
         stop_on_fail = True
     if args.debug:
         debug = True
+    variables = args.var
     files = args.file
     if not files and args.pattern:
         files = ','.join(glob.glob(args.pattern))
 
     if files:
-        http_processor = HTTPProcessor(files)
+        http_processor = HTTPProcessor(files, variables)
         run_success = http_processor.run(
             name=args.name,
             index=args.index,
             post_name=args.post_name,
-            pre_name=args.pre_name
+            pre_name=args.pre_name,
+            distinct=args.distinct
         )
         message = 'PASSED: {} FAILED: {}'.format(
             http_processor.success,
             http_processor.failures
         )
         if run_success:
-            log("Success[{}]".format(message), 0)
+            log("Success [{}]".format(message), 0)
         else:
-            log("Failed[{}]".format(message), 1)
+            log("Failed [{}]".format(message), 1)
