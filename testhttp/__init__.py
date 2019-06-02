@@ -7,7 +7,7 @@ import re
 import random
 import collections
 
-version = '0.6.0'
+version = '0.6.1'
 verbose = False
 debug = False
 stop_on_fail = False
@@ -21,7 +21,7 @@ def log(message, exit_code=None, end=None):
 
 
 class HTTPObject:
-    def __init__(self, data, processor):
+    def __init__(self, data, processor, filepath):
         self.method = 'GET'
         self.url = None
         self.version = 'HTTP/1.1'  # ignored
@@ -36,6 +36,7 @@ class HTTPObject:
         self.test_result = None
         self.response = None
         self.processor = processor
+        self.file = filepath
 
         self.parse_meta()
 
@@ -118,6 +119,10 @@ class HTTPObject:
                     if v not in self.vars:
                         val = self.processor.evaluate(
                             v, self if for_test else None)
+                        
+                        if val is None:
+                            val = eval_var
+
                         # check if direct map
                         if len(eval_vars) == 1 and eval_var == text:
                             text = val
@@ -159,7 +164,7 @@ class HTTPObject:
 
             url = self.replace_vars(self.url)
             headers = self.parse_headers()
-            log('Running \'{}\''.format(self.meta.get('name', self.url)))
+            log('Running \'{}\' in {}'.format(self.meta.get('name', self.url), self.file))
             if verbose:
                 log('Request: {} {} {}'.format(
                     self.method, url, len(body) if len(body) > 1000 else body))
@@ -232,13 +237,15 @@ class HTTPProcessor:
                     self.parse_http(path, True)
 
         for content in contents:
-            http_object = HTTPObject(content, self)
+            http_object = HTTPObject(content, self, file)
             self.vars.update(http_object.vars)
-            if 'name' in http_object.meta:
-                self.http_objects_by_name[http_object.meta['name']
-                                          ] = http_object
-            if not is_import:
-                self.http_opjects.append(http_object)
+            
+            if http_object.body is not None:
+                if 'name' in http_object.meta:
+                    self.http_objects_by_name[http_object.meta['name']
+                                            ] = http_object
+                if not is_import:
+                    self.http_opjects.append(http_object)
 
     def evaluate(self, token, http_object=None):
         if token in system_vars:
@@ -390,7 +397,7 @@ def cmd():
     variables = args.var
     files = args.file
     if not files and args.pattern:
-        files = ','.join(glob.glob(args.pattern))
+        files = glob.glob(args.pattern)
 
     if files:
         http_processor = HTTPProcessor(files, variables)
