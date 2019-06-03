@@ -7,14 +7,23 @@ testhttp allows you to send HTTP request for testing your endpoints. This is sti
 * The goal is to be compatible with [vscode-restclient](https://github.com/Huachao/vscode-restclient) but with ability to assert results and automate dependencies.
 * Run named or by index http definition
 * Import other files to re-use http definition
+* Set global variables as a context for the scripts
 
 ## Install
 ```bash
 pip install testhttp
 # -h for help
 testhttp -h
+
 # Run a file
 testhttp --file sample.http
+
+# Run all files based on glob pattern
+testhttp --pattern '/Users/path/to/**/test/*.http'
+# Declaring a global variable that will be available for all scripts
+testhttp --var host=https://baseurl/
+# Automatically remove steps with the same name
+testhttp --distinct
 ```
 
 ## Usage
