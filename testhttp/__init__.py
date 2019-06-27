@@ -7,7 +7,7 @@ import re
 import random
 import collections
 
-version = '0.6.1'
+version = '0.6.2'
 verbose = False
 debug = False
 stop_on_fail = False
@@ -119,7 +119,7 @@ class HTTPObject:
                     if v not in self.vars:
                         val = self.processor.evaluate(
                             v, self if for_test else None)
-                        
+
                         if val is None:
                             val = eval_var
 
@@ -206,10 +206,6 @@ class HTTPProcessor:
         self.failures = 0
         self.cwd = None
 
-        # for variable in [variable for variable in (vars or [])]:
-        #     var_key_value = variable.split('=')
-        #     self.vars[var_key_value[0]] = var_key_value[1]
-
         for variable in (vars or []):
             var_key_value = variable.split('=')
             self.vars[var_key_value[0]] = var_key_value[1]
@@ -239,13 +235,12 @@ class HTTPProcessor:
         for content in contents:
             http_object = HTTPObject(content, self, file)
             self.vars.update(http_object.vars)
-            
-            if http_object.body is not None:
-                if 'name' in http_object.meta:
-                    self.http_objects_by_name[http_object.meta['name']
-                                            ] = http_object
-                if not is_import:
-                    self.http_opjects.append(http_object)
+
+            if 'name' in http_object.meta:
+                self.http_objects_by_name[http_object.meta['name']
+                                        ] = http_object
+            if not is_import:
+                self.http_opjects.append(http_object)
 
     def evaluate(self, token, http_object=None):
         if token in system_vars:
@@ -323,7 +318,7 @@ class HTTPProcessor:
             else:
                 self.run_http_object(self.http_opjects[index])
         else:
-           
+
             http_objects = []
             if distinct:
                 seen = collections.OrderedDict()
@@ -358,10 +353,10 @@ def cmd():
     global verbose, stop_on_fail, debug
     parser = argparse.ArgumentParser(description='Run http tests')
     parser.add_argument('--file',
-                        help='test a specific file or comma delimited file paths', 
+                        help='test a specific file or comma delimited file paths',
                         action='append')
     parser.add_argument('--var',
-                        help='add a variable needed for the scripts (useful for environmental variables)', 
+                        help='add a variable needed for the scripts (useful for environmental variables)',
                         action='append')
     parser.add_argument('--pattern',
                         help='test a files matching a pattern "path/to/*.http"')
@@ -374,7 +369,7 @@ def cmd():
     parser.add_argument('--index', type=int,
                         help='test a specific http with a positional index starts with 0')
     parser.add_argument('--distinct',
-                        help='remove tests with the same name (usefull when running multiple independent tests)', 
+                        help='remove tests with the same name (usefull when running multiple independent tests)',
                         action='store_true')
     parser.add_argument('--stop_on_fail', dest='stop_on_fail',
                         action='store_true', help='Stop tests on fail')
