@@ -1,0 +1,11 @@
+@import example.http
+
+###
+
+@code = {{postExample.response.status_code}}
+
+GET {{baseUrl}} HTTP/1.1
+
+>>>
+
+assert {{response.status_code}} == {{code}}

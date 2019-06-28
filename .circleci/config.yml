@@ -19,4 +19,4 @@ jobs:
           name: run tests
           command: |
             . venv/bin/activate
-            testhttp --file tests/*.http
+            testhttp --pattern 'tests/*.http'

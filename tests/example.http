@@ -33,3 +33,5 @@ Content-Type: application/json
 >>>
 
 assert {{response.status_code}} == 200
+assert {{response.doesNotExists}} is None
+assert {{invalid}} is None
