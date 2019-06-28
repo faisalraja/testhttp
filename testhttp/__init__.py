@@ -98,6 +98,8 @@ class HTTPObject:
     def replace_vars(self, text, for_test=False):
         def wrap_quote(txt):
             if for_test and type(txt) is str:
+                if "'" in txt or '\n' in txt:
+                    return '"""{}"""'.format(txt)
                 return "'{}'".format(txt)
             return txt
 
@@ -278,7 +280,7 @@ class HTTPProcessor:
                             current_object = current_object.json()
                         except:
                             current_object = current_object.text
-                    elif type(current_object) is dict:
+                    elif type(current_object) in (dict, requests.structures.CaseInsensitiveDict):
                         current_object = current_object.get(val, None)
                     elif type(current_object) is list:
                         try:
