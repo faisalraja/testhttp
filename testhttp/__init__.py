@@ -7,7 +7,7 @@ import re
 import random
 import collections
 
-version = '0.6.2'
+version = '0.6.3'
 verbose = False
 debug = False
 stop_on_fail = False
@@ -120,9 +120,6 @@ class HTTPObject:
                         val = self.processor.evaluate(
                             v, self if for_test else None)
 
-                        if val is None:
-                            val = eval_var
-
                         # check if direct map
                         if len(eval_vars) == 1 and eval_var == text:
                             text = val
@@ -164,7 +161,7 @@ class HTTPObject:
 
             url = self.replace_vars(self.url)
             headers = self.parse_headers()
-            log('Running \'{}\' in {}'.format(self.meta.get('name', self.url), self.file))
+            log("Running '{}' in {}".format(self.meta.get('name', self.url), self.file))
             if verbose:
                 log('Request: {} {} {}'.format(
                     self.method, url, len(body) if len(body) > 1000 else body))
@@ -184,11 +181,15 @@ class HTTPObject:
             failed_count = 0
             for test in self.tests:
                 code = self.replace_vars(test, True)
-                if eval(code):
-                    success_count += 1
-                else:
+                try:
+                    if eval(code):
+                        success_count += 1
+                    else:
+                        failed_count += 1
+                        log("  Failed test: {}".format(code))
+                except Exception as e:
                     failed_count += 1
-                    log("Failed test: {}".format(code))
+                    log("  Failed test: {} \n    Exception: {}".format(code, e))
             if success_count:
                 log("PASSED: {}".format(success_count))
             if failed_count:
@@ -280,7 +281,10 @@ class HTTPProcessor:
                     elif type(current_object) is dict:
                         current_object = current_object.get(val, None)
                     elif type(current_object) is list:
-                        current_object = current_object[int(val)]
+                        try:
+                            current_object = current_object[int(val)]
+                        except:
+                            current_object = None
                     else:
                         try:
                             current_object = getattr(current_object, val, None)
