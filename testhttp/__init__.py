@@ -7,7 +7,7 @@ import re
 import random
 import collections
 
-version = '0.6.3'
+version = '0.6.4'
 verbose = False
 debug = False
 stop_on_fail = False
@@ -126,8 +126,10 @@ class HTTPObject:
                         if len(eval_vars) == 1 and eval_var == text:
                             text = val
                         else:
-                            text = text.replace(
-                                '{{' + v + '}}', str(wrap_quote(val)))
+                            # evalulate to '' if no value
+                            orig = '{{' + v + '}}'                            
+                            text = text.replace(orig, 
+                                str(wrap_quote(val if orig != val else '')))
                         # do not store built-in functions or context tokens
                         if not (v.startswith('$') or v.startswith('response')):
                             self.vars[v] = val
@@ -188,10 +190,10 @@ class HTTPObject:
                         success_count += 1
                     else:
                         failed_count += 1
-                        log("  Failed test: {}".format(code))
+                        log("  Failed test: {}".format(code), exit_code=1 if stop_on_fail else None)
                 except Exception as e:
                     failed_count += 1
-                    log("  Failed test: {} \n    Exception: {}".format(code, e))
+                    log("  Failed test: {} \n    Exception: {}".format(code, e), exit_code=1 if stop_on_fail else None)
             if success_count:
                 log("PASSED: {}".format(success_count))
             if failed_count:
