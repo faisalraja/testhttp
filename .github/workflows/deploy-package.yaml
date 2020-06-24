@@ -22,7 +22,7 @@ jobs:
           . venv/bin/activate
           testhttp --pattern 'tests/*.http'
       - name: build distributable
-        run: python3 setup.py sdist bdist_wheel
+        run: python3 setup.py sdist
       - name: publish
         run: |
           python3 -m pip install --user --upgrade twine
