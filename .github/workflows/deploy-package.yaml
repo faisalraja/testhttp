@@ -1,9 +1,6 @@
-name: deploy-stage
+name: deploy-package
 on:
   push:
-    paths:
-      - "testhttp/**"
-      - "tests/**"
     branches:
       - master
 
@@ -24,3 +21,9 @@ jobs:
         run: |
           . venv/bin/activate
           testhttp --pattern 'tests/*.http'
+      - name: build distributable
+        run: python3 setup.py sdist bdist_wheel
+      - name: publish
+        run: |
+          python3 -m pip install --user --upgrade twine
+          python3 -m twine upload -u '__token__' -p '${{ secrets.API_TOKEN }}' dist/*
