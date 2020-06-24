@@ -15,7 +15,7 @@ assert {{h1}} in {{response.body}}
 @exampleBody = {{getExample.response.body}}
 
 # @name getExampleNotFound
-GET {{baseUrl}}/abc HTTP/1.1
+GET {{baseUrl}}/abcd HTTP/1.1
 
 >>>
 

@@ -1,0 +1,26 @@
+name: deploy-stage
+on:
+  push:
+    paths:
+      - "testhttp/**"
+      - "tests/**"
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: "3.8"
+      - name: install dependencies
+        run: |
+          python3 -m venv venv
+          . venv/bin/activate
+          pip install .
+      - name: run tests
+        run: |
+          . venv/bin/activate
+          testhttp --pattern 'tests/*.http'
