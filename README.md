@@ -1,5 +1,4 @@
-[![CircleCI](https://circleci.com/gh/faisalraja/testhttp.svg?style=svg)](https://circleci.com/gh/faisalraja/testhttp)
-
+![deploy-package](https://github.com/faisalraja/testhttp/workflows/deploy-package/badge.svg?branch=master)
 # testhttp
 
 
