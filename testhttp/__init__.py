@@ -7,7 +7,7 @@ import re
 import random
 import collections
 
-version = '0.6.5'
+version = '0.6.6'
 verbose = False
 debug = False
 stop_on_fail = False
