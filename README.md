@@ -2,7 +2,7 @@
 # testhttp
 
 
-testhttp allows you to send HTTP request for testing your endpoints. This is still very incomplete but satisfy my needs at the moment. Feel free to suggest or create changes for updates.
+testhttp allows you to send HTTP request for testing your endpoints.
 
 ## Features
 * The goal is to be compatible with [vscode-restclient](https://github.com/Huachao/vscode-restclient) but with ability to assert results and automate dependencies.
